@@ -52,7 +52,9 @@ object Message {
                 p = validateAndSwitchFieldMask(in, l, p, 32)
                 jsonrpc = in.readString(jsonrpc)
                 if (jsonrpc != "2.0") {
-                  in.decodeError(s"Expected JSON-RPC version 2.0 message, obtained version $jsonrpc")
+                  in.decodeError(
+                    s"Expected JSON-RPC version 2.0 message, obtained version $jsonrpc"
+                  )
                 }
               } else {
                 in.skip() // or raise an error here in case of no other fields are not allowed
