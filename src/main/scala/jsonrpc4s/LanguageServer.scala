@@ -1,7 +1,6 @@
 package jsonrpc4s
 
 import monix.eval.Task
-import monix.execution.Cancelable
 import monix.execution.Scheduler
 import monix.reactive.Observable
 import scala.collection.concurrent.TrieMap
@@ -11,6 +10,7 @@ import scala.util.control.NonFatal
 import scala.util.{Try, Success, Failure}
 import scribe.LoggerSupport
 import com.github.plokhotnyuk.jsoniter_scala.core.readFromArray
+import monix.execution.CancelableFuture
 
 final class LanguageServer(
     in: Observable[BaseProtocolMessage],
@@ -19,7 +19,7 @@ final class LanguageServer(
     requestScheduler: Scheduler,
     logger: LoggerSupport
 ) {
-  private val activeClientRequests: TrieMap[RequestId, Cancelable] = TrieMap.empty
+  private val activeClientRequests: TrieMap[RequestId, CancelableFuture[Response]] = TrieMap.empty
   private val cancelNotification = {
     Service.notification[CancelParams]("$/cancelRequest", logger) {
       new Service[CancelParams, Unit] {
@@ -49,6 +49,18 @@ final class LanguageServer(
 
   private val handlersByMethodName: Map[String, NamedJsonRpcService] =
     services.addService(cancelNotification).byMethodName
+
+  def cancelAllRequests(): Unit = {
+    activeClientRequests.values.foreach { cancelable =>
+      cancelable.cancel()
+    }
+  }
+
+  def awaitRunningTasks: Task[Unit] = {
+    val futures = activeClientRequests.values.map(fut => Task.fromFuture(fut))
+    // Await until completion and ignore task results
+    Task.gatherUnordered(futures).materialize.map(_ => ())
+  }
 
   def handleValidMessage(message: Message): Task[Response] = message match {
     case response: Response =>
