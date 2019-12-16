@@ -12,34 +12,71 @@ sealed trait Message {
 }
 
 object Message {
-  implicit val messageCodec = new JsonValueCodec[Message] {
+  implicit val messageCodec: JsonValueCodec[Message] = new JsonValueCodec[Message] {
+    //                   id method result error params jsonrpc
+    // Request           1  2      0      0     0/16   32
+    // Response.None     0  0      0      0     0      32
+    // Response.Error    1  0      0      8     0      32
+    // Response.Success  1  0      4      0     0      32
+    // Notification      0  2      0      0     0/16   32
     def decodeValue(in: JsonReader, default: Message): Message = {
-      val json = RawJson.codec.decodeValue(in, RawJson.codec.nullValue)
-      val msg = {
-        RawJson.parseJsonTo[Request](json) match {
-          case Right(msg) => msg
-          case Left(err) =>
-            RawJson.parseJsonTo[Notification](json) match {
-              case Right(msg) => msg
-              case Left(err) =>
-                RawJson.parseJsonTo[Response](json) match {
-                  case Right(msg) => msg
-                  case Left(err) =>
-                    in.decodeError(
-                      "Invalid JSON-RPC message, expected request, notification or response type"
-                    )
+      val msg: Message =
+        if (in.isNextToken('{')) {
+          var p = 63
+          var id: RequestId = RequestId.requestIdCodec.nullValue
+          var method: String = null
+          var result: RawJson = RawJson.codec.nullValue
+          var error: ErrorObject = ErrorObject.errorObjectCodec.nullValue
+          var params: Option[RawJson] = None
+          var jsonrpc: String = null
+          if (!in.isNextToken('}')) {
+            in.rollbackToken()
+            do {
+              val l = in.readKeyAsCharBuf();
+              if (in.isCharBufEqualsTo(l, "id")) {
+                p = validateAndSwitchFieldMask(in, l, p, 1)
+                id = RequestId.requestIdCodec.decodeValue(in, id)
+              } else if (in.isCharBufEqualsTo(l, "method")) {
+                p = validateAndSwitchFieldMask(in, l, p, 2)
+                method = in.readString(method)
+              } else if (in.isCharBufEqualsTo(l, "result")) {
+                p = validateAndSwitchFieldMask(in, l, p, 4)
+                result = RawJson(in.readRawValAsBytes())
+              } else if (in.isCharBufEqualsTo(l, "error")) {
+                p = validateAndSwitchFieldMask(in, l, p, 8)
+                error = ErrorObject.errorObjectCodec.decodeValue(in, error)
+              } else if (in.isCharBufEqualsTo(l, "params")) {
+                p = validateAndSwitchFieldMask(in, l, p, 16)
+                params = Some(RawJson(in.readRawValAsBytes()))
+              } else if (in.isCharBufEqualsTo(l, "jsonrpc")) {
+                p = validateAndSwitchFieldMask(in, l, p, 32)
+                jsonrpc = in.readString(jsonrpc)
+                if (jsonrpc != "2.0") {
+                  in.decodeError(
+                    s"Expected JSON-RPC version 2.0 message, obtained version $jsonrpc"
+                  )
                 }
+              } else {
+                in.skip() // or raise an error here in case of no other fields are not allowed
+              }
+            } while (in.isNextToken(','))
+            if (!in.isCurrentToken('}')) {
+              in.objectEndOrCommaError()
             }
-        }
-      }
-
-      if (msg == null) {
+          }
+          p match {
+            case 12 | 28 => Request(method, params, id, jsonrpc)
+            case 31 => Response.None
+            case 22 => Response.Error(error, id, jsonrpc)
+            case 26 => Response.Success(result, id, jsonrpc)
+            case 13 | 29 => Notification(method, params, jsonrpc)
+            case _ => default
+          }
+        } else in.readNullOrTokenError(default, '{')
+      if (msg == default) {
         in.decodeError("Invalid JSON-RPC message, expected request, notification or response type")
-      } else if (msg.jsonrpc != "2.0") {
-        in.decodeError(s"Expected JSON-RPC version 2.0 message, obtained version ${msg.jsonrpc}")
-      } else {
-        msg
       }
+      msg
     }
 
     def encodeValue(msg: Message, out: JsonWriter): Unit = {
@@ -51,6 +88,14 @@ object Message {
     }
 
     def nullValue: Message = null
+
+    private def validateAndSwitchFieldMask(in: JsonReader, l: Int, p: Int, mask: Int): Int = {
+      if ((p & mask) != 0) {
+        p ^ mask
+      } else {
+        in.duplicatedKeyError(l)
+      }
+    }
   }
 }
 
