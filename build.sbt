@@ -27,13 +27,13 @@ inThisBuild(
       "-Xlint"
     ),
     testFrameworks += new TestFramework("minitest.runner.Framework"),
-    publishArtifact in packageDoc := sys.env.contains("CI"),
-    publishArtifact in packageSrc := sys.env.contains("CI"),
-    bloopExportJarClassifiers := Some(Set("sources"))
+    bloopExportJarClassifiers := Some(Set("sources")),
+    releaseEarlyWith := SonatypePublisher
   )
 )
 
 name := "jsonrpc4s"
+publishTo := sonatypePublishToBundle.value
 libraryDependencies ++= List(
   "io.monix" %% "monix" % "3.1.0",
   "com.outr" %% "scribe" % "2.7.10",
