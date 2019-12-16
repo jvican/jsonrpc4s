@@ -6,6 +6,12 @@ inThisBuild(
     licenses := Seq(
       "Apache-2.0" -> url("http://www.apache.org/licenses/LICENSE-2.0")
     ),
+    scmInfo := Some(
+      ScmInfo(
+        url("https://github.com/jvican/jsonrpc4s"),
+        "scm:git:git@github.com:jvican/jsonrpc4s.git"
+      )
+    ),
     developers := List(
       Developer(
         "jvican",
