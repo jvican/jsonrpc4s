@@ -28,6 +28,7 @@ object BaseProtocolMessageSuite extends SimpleTestSuite {
       """|Content-Length: 60
          |
          |{"method":"method","params":"params","id":1,"jsonrpc":"2.0"}""".stripMargin
+        .replaceAll("\r\n", "\n")
     )
   }
 
