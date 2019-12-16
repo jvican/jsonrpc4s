@@ -1,6 +1,5 @@
 package jsonrpc4s
 
-import java.io.IOException
 import java.io.OutputStream
 import java.nio.ByteBuffer
 import monix.execution.Ack
