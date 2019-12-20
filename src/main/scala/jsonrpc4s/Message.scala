@@ -111,7 +111,7 @@ final case class Request(
 
 object Request {
   implicit val requestCodec: JsonValueCodec[Request] =
-    JsonCodecMaker.make(CodecMakerConfig.withTransientEmpty(false))
+    JsonCodecMaker.make(CodecMakerConfig.withTransientDefault(false))
 }
 
 final case class Notification(
@@ -122,7 +122,7 @@ final case class Notification(
 
 object Notification {
   implicit val notificationCodec: JsonValueCodec[Notification] =
-    JsonCodecMaker.make(CodecMakerConfig.withTransientEmpty(false))
+    JsonCodecMaker.make(CodecMakerConfig.withTransientDefault(false))
 }
 
 sealed trait Response extends Message {
@@ -146,9 +146,9 @@ object Response {
   ) extends Response
 
   implicit val errorCodec: JsonValueCodec[Error] =
-    JsonCodecMaker.make(CodecMakerConfig.withTransientEmpty(false))
+    JsonCodecMaker.make(CodecMakerConfig.withTransientDefault(false))
   implicit val successCodec: JsonValueCodec[Success] =
-    JsonCodecMaker.make(CodecMakerConfig.withTransientEmpty(false))
+    JsonCodecMaker.make(CodecMakerConfig.withTransientDefault(false))
 
   implicit val responseCodec: JsonValueCodec[Response] = new JsonValueCodec[Response] {
     def nullValue: Response = null
