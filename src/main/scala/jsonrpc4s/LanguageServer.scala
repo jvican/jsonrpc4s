@@ -12,13 +12,21 @@ import scribe.LoggerSupport
 import com.github.plokhotnyuk.jsoniter_scala.core.readFromArray
 import monix.execution.CancelableFuture
 
-final class LanguageServer(
-    in: Observable[BaseProtocolMessage],
+final class LanguageServer private (
+    in: Either[Observable[Message], Observable[BaseProtocolMessage]],
     client: LanguageClient,
     services: Services,
     requestScheduler: Scheduler,
     logger: LoggerSupport
 ) {
+  def this(
+      in: Observable[BaseProtocolMessage],
+      client: LanguageClient,
+      services: Services,
+      requestScheduler: Scheduler,
+      logger: LoggerSupport
+  ) = this(Right(in), client, services, requestScheduler, logger)
+
   private val activeClientRequests: TrieMap[RequestId, CancelableFuture[Response]] = TrieMap.empty
   private val cancelNotification = {
     Service.notification[CancelParams]("$/cancelRequest", logger) {
@@ -122,9 +130,8 @@ final class LanguageServer(
   }
 
   def startTask: Task[Unit] = {
-    in.foreachL { msg =>
-      handleMessage(msg)
-        .map {
+    def serviceResponse(r: Task[Response]) = {
+      r.map {
           case Response.None => ()
           case response => client.serverRespond(response)
         }
@@ -134,6 +141,13 @@ final class LanguageServer(
         }
         .runToFuture(requestScheduler)
     }
+
+    in match {
+      case Left(messages) =>
+        messages.foreachL(msg => serviceResponse(handleValidMessage(msg)))
+      case Right(unparsedMessages) =>
+        unparsedMessages.foreachL(msg => serviceResponse(handleMessage(msg)))
+    }
   }
 
   def listen(): Unit = {
@@ -141,4 +155,14 @@ final class LanguageServer(
     logger.info("Listening....")
     Await.result(f, Duration.Inf)
   }
+}
+
+object LanguageServer {
+  def apply(
+      in: Observable[Message],
+      client: LanguageClient,
+      services: Services,
+      requestScheduler: Scheduler,
+      logger: LoggerSupport
+  ): LanguageServer = new LanguageServer(Left(in), client, services, requestScheduler, logger)
 }

@@ -97,5 +97,35 @@ object MonixEnrichments {
         }
       }
     }
+
+    def messagesFromByteStream(
+        out: Observer.Sync[ByteBuffer],
+        logger: LoggerSupport
+    ): Observer.Sync[Message] = {
+      new Observer.Sync[Message] {
+        private[this] var isClosed = false
+        private[this] val writer = new MessageWriter(out, logger)
+        override def onNext(elem: Message): Ack = writer.synchronized {
+          if (isClosed) Ack.Stop
+          else {
+            try {
+              writer.write(elem)
+              Ack.Continue
+            } catch {
+              case t: java.io.IOException =>
+                logger.trace("Message stream closed!", t)
+                isClosed = true
+                Ack.Stop
+            }
+          }
+        }
+        override def onError(ex: Throwable): Unit = ()
+        override def onComplete(): Unit = {
+          out.synchronized {
+            out.onComplete()
+          }
+        }
+      }
+    }
   }
 }

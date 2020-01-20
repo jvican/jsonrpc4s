@@ -1,7 +1,6 @@
 package jsonrpc4s
 
 import java.io.OutputStream
-import java.nio.ByteBuffer
 import monix.execution.Callback
 import monix.eval.Task
 import monix.execution.Ack
@@ -19,27 +18,23 @@ import com.github.plokhotnyuk.jsoniter_scala.core.JsonValueCodec
 import com.github.plokhotnyuk.jsoniter_scala.core.readFromArray
 import com.github.plokhotnyuk.jsoniter_scala.core.writeToArray
 
-class LanguageClient(out: Observer[ByteBuffer], logger: LoggerSupport) extends JsonRpcClient {
-  def this(out: OutputStream, logger: LoggerSupport) =
-    this(Observer.fromOutputStream(out, logger), logger)
-
-  private val writer = new MessageWriter(out, logger)
+class LanguageClient(out: Observer[Message], logger: LoggerSupport) extends JsonRpcClient {
   private val counter: AtomicInt = Atomic(1)
   private val activeServerRequests = TrieMap.empty[RequestId, Callback[Throwable, Response]]
 
   private def toJson[R: JsonValueCodec](r: R): RawJson = RawJson(writeToArray(r))
 
   def notify[A: JsonValueCodec](method: String, notification: A): Future[Ack] = {
-    writer.write(Notification(method, Some(toJson(notification))))
+    out.onNext(Notification(method, Some(toJson(notification))))
   }
 
   def serverRespond(response: Response): Future[Ack] = {
     response match {
       case Response.None => Ack.Continue
-      case x: Response.Success => writer.write(x)
+      case x: Response.Success => out.onNext(x)
       case x: Response.Error =>
         //logger.error(s"Response error: $x")
-        writer.write(x)
+        out.onNext(x)
     }
   }
   def clientRespond(response: Response): Unit =
@@ -63,11 +58,11 @@ class LanguageClient(out: Observer[ByteBuffer], logger: LoggerSupport) extends J
       request: A
   ): Task[Either[Response.Error, B]] = {
     val nextId = RequestId(counter.incrementAndGet())
-    val response = Task.create[Response] { (out, cb) =>
-      val scheduled = out.scheduleOnce(Duration(0, "s")) {
+    val response = Task.create[Response] { (s, cb) =>
+      val scheduled = s.scheduleOnce(Duration(0, "s")) {
         val json = Request(method, Some(toJson(request)), nextId)
         activeServerRequests.put(nextId, cb)
-        writer.write(json)
+        out.onNext(json)
       }
       Cancelable { () =>
         scheduled.cancel()
@@ -87,6 +82,9 @@ class LanguageClient(out: Observer[ByteBuffer], logger: LoggerSupport) extends J
 }
 
 object LanguageClient {
-  def fromOutputStream(out: OutputStream, logger: LoggerSupport) =
-    new LanguageClient(Observer.fromOutputStream(out, logger), logger)
+  def fromOutputStream(out: OutputStream, logger: LoggerSupport): LanguageClient = {
+    val bsOut = Observer.fromOutputStream(out, logger)
+    val msgOut = Observer.messagesFromByteStream(bsOut, logger)
+    new LanguageClient(msgOut, logger)
+  }
 }
