@@ -6,7 +6,7 @@ import monix.execution.Ack
 import scala.concurrent.Future
 import com.github.plokhotnyuk.jsoniter_scala.core.JsonValueCodec
 
-trait JsonRpcClient {
+trait RpcActions {
   final def notify[A](
       endpoint: Endpoint[A, Unit],
       notification: A
@@ -27,8 +27,8 @@ trait JsonRpcClient {
   ): Task[Either[Response.Error, B]]
 }
 
-object JsonRpcClient {
-  val empty: JsonRpcClient = new JsonRpcClient {
+object RpcActions {
+  val empty: RpcActions = new RpcActions {
     override def request[A: JsonValueCodec, B: JsonValueCodec](
         method: String,
         request: A

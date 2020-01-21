@@ -9,7 +9,7 @@ import scribe.Logger
 import jsonrpc4s.Endpoint
 import jsonrpc4s.BaseMessageCodecs.stringCodec
 import jsonrpc4s.Services
-import jsonrpc4s.LanguageClient
+import jsonrpc4s.RpcClient
 import jsonrpc4s.testkit.TestConnection
 
 /**
@@ -56,7 +56,7 @@ object PingPongSuite extends SimpleTestSuite {
           promise.complete(util.Success(()))
         }
       }
-    val pongBack: LanguageClient => Services = { client =>
+    val pongBack: RpcClient => Services = { client =>
       services.notification(Ping) { message =>
         Pong.notify(message.replace("Ping", "Pong"))(client)
       }

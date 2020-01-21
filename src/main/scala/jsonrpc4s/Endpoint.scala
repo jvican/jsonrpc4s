@@ -9,12 +9,12 @@ class Endpoint[A, B](
     val method: String
 )(implicit val codecA: JsonValueCodec[A], val codecB: JsonValueCodec[B]) {
   def request(request: A)(
-      implicit client: JsonRpcClient
+      implicit client: RpcActions
   ): Task[Either[Response.Error, B]] =
     client.request[A, B](method, request)
   def notify(
       notification: A
-  )(implicit client: JsonRpcClient): Future[Ack] =
+  )(implicit client: RpcActions): Future[Ack] =
     client.notify[A](method, notification)
 }
 

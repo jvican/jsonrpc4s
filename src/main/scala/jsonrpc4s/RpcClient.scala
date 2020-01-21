@@ -18,7 +18,7 @@ import com.github.plokhotnyuk.jsoniter_scala.core.JsonValueCodec
 import com.github.plokhotnyuk.jsoniter_scala.core.readFromArray
 import com.github.plokhotnyuk.jsoniter_scala.core.writeToArray
 
-class LanguageClient(out: Observer[Message], logger: LoggerSupport) extends JsonRpcClient {
+class RpcClient(out: Observer[Message], logger: LoggerSupport) extends RpcActions {
   private val counter: AtomicInt = Atomic(1)
   private val activeServerRequests = TrieMap.empty[RequestId, Callback[Throwable, Response]]
 
@@ -81,10 +81,10 @@ class LanguageClient(out: Observer[Message], logger: LoggerSupport) extends Json
   }
 }
 
-object LanguageClient {
-  def fromOutputStream(out: OutputStream, logger: LoggerSupport): LanguageClient = {
+object RpcClient {
+  def fromOutputStream(out: OutputStream, logger: LoggerSupport): RpcClient = {
     val bsOut = Observer.fromOutputStream(out, logger)
     val msgOut = Observer.messagesFromByteStream(bsOut, logger)
-    new LanguageClient(msgOut, logger)
+    new RpcClient(msgOut, logger)
   }
 }

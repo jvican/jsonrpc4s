@@ -6,7 +6,7 @@ import monix.execution.Cancelable
 import monix.execution.Scheduler
 import jsonrpc4s.Connection
 import jsonrpc4s.InputOutput
-import jsonrpc4s.LanguageClient
+import jsonrpc4s.RpcClient
 import jsonrpc4s.Services
 
 /**
@@ -39,8 +39,8 @@ object TestConnection {
    * @param s the scheduler to run all services.
    */
   def apply(
-      clientServices: LanguageClient => Services,
-      serverServices: LanguageClient => Services
+      clientServices: RpcClient => Services,
+      serverServices: RpcClient => Services
   )(implicit s: Scheduler): TestConnection = {
     val inAlice = new PipedInputStream()
     val inBob = new PipedInputStream()

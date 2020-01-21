@@ -12,16 +12,16 @@ import scribe.LoggerSupport
 import com.github.plokhotnyuk.jsoniter_scala.core.readFromArray
 import monix.execution.CancelableFuture
 
-final class LanguageServer private (
+final class RpcServer private (
     in: Either[Observable[Message], Observable[BaseProtocolMessage]],
-    client: LanguageClient,
+    client: RpcClient,
     services: Services,
     requestScheduler: Scheduler,
     logger: LoggerSupport
 ) {
   def this(
       in: Observable[BaseProtocolMessage],
-      client: LanguageClient,
+      client: RpcClient,
       services: Services,
       requestScheduler: Scheduler,
       logger: LoggerSupport
@@ -157,12 +157,12 @@ final class LanguageServer private (
   }
 }
 
-object LanguageServer {
+object RpcServer {
   def apply(
       in: Observable[Message],
-      client: LanguageClient,
+      client: RpcClient,
       services: Services,
       requestScheduler: Scheduler,
       logger: LoggerSupport
-  ): LanguageServer = new LanguageServer(Left(in), client, services, requestScheduler, logger)
+  ): RpcServer = new RpcServer(Left(in), client, services, requestScheduler, logger)
 }
