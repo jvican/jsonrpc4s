@@ -1,8 +1,26 @@
+val repoPattern = Patterns(
+  Vector("[orgPath]/[module]/[revision]/[module]-[revision]-ivy.[ext]"),
+  Vector("[orgPath]/[module]/[revision]/[artifact]-[revision](-[classifier]).[ext]"),
+  isMavenCompatible = false,
+  descriptorOptional = false,
+  skipConsistencyCheck = true
+)
+
+val artifactoryUser = sys.env.get("NETFLIX_ARTIFACTORY_USER").getOrElse("")
+val artifactoryPassword = sys.env.get("NETFLIX_ARTIFACTORY_PASSWORD").getOrElse("")
+val publishSettings = List(
+  credentials += Credentials("Artifactory Realm", "artifacts.netflix.com", artifactoryUser, artifactoryPassword),
+  publishTo := Option(
+    if (isSnapshot.value) Resolver.url("Netflix Snapshot Local", url("https://artifacts.netflix.com/libs-snapshots-local"))(repoPattern)
+    else Resolver.url("Netflix Release Local", url("https://artifacts.netflix.com/libs-releases-local"))(repoPattern)
+  )
+)
+
 inThisBuild(
   List(
     organization := "me.vican.jorge",
     homepage := Some(url("https://github.com/jvican/json4pc4")),
-    publishMavenStyle := true,
+    publishMavenStyle := false,
     licenses := Seq(
       "Apache-2.0" -> url("http://www.apache.org/licenses/LICENSE-2.0")
     ),
@@ -29,7 +47,7 @@ inThisBuild(
     testFrameworks += new TestFramework("minitest.runner.Framework"),
     bloopExportJarClassifiers := Some(Set("sources")),
     releaseEarlyWith := SonatypePublisher
-  )
+  ) ++ publishSettings
 )
 
 name := "jsonrpc4s"
@@ -42,3 +60,4 @@ libraryDependencies ++= List(
   "io.monix" %% "minitest" % "2.7.0" % Test,
   "com.lihaoyi" %% "pprint" % "0.5.6" % Test
 )
+publishSettings
