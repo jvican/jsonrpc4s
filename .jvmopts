@@ -1,2 +1,2 @@
 -Dbloop.generate.sbt=false
--Dsbt-bloop.offload-compilation=true
+-Dsbt-bloop.offload-compilation=false
