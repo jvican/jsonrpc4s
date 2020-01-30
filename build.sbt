@@ -1,6 +1,6 @@
 val repoPattern = Patterns(
-  Vector("[orgPath]/[module]/[revision]/[module]-[revision]-ivy.[ext]"),
-  Vector("[orgPath]/[module]/[revision]/[module]-[revision](-[classifier]).[ext]"),
+  Vector("[orgPath]/[module]/[revision]/[module]-[revision](-[fileItegRev])(-[classifier]).[ext]"),
+  Vector("[orgPath]/[module]/[revision]/[module]-[revision](-[fileItegRev])(-[classifier]).[ext]"),
   isMavenCompatible = false,
   descriptorOptional = false,
   skipConsistencyCheck = true
