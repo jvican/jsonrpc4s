@@ -10,9 +10,10 @@ import scala.concurrent.Future
 import monix.execution.Ack
 import monix.reactive.Observer
 import scribe.LoggerSupport
+import java.nio.channels.WritableByteChannel
 
 /**
- * A class to write JSON-RPC messages to an output stream.
+ * A trait that writes JSON-RPC messages to an output stream.
  * It produces the following format:
  *
  * <Header> '\r\n' <Content>
@@ -25,27 +26,56 @@ import scribe.LoggerSupport
  *
  * @note The header part is defined to be ASCII encoded, while the content part is UTF8.
  */
-class LowLevelMessageWriter(out: Observer[ByteBuffer], logger: LoggerSupport) {
+sealed trait LowLevelMessageWriter {
+  protected val baos = new ByteArrayOutputStream(2048)
+  protected val headerOut = LowLevelMessageWriter.headerWriter(baos)
+}
 
-  /** Lock protecting the output stream, so multiple writes don't mix message chunks. */
-  private val lock = new Object
+/**
+ * @inheritdoc
+ *
+ * @param out is an output stream where the writer writes directly.
+ * @param logger is a logger where we trace messages if level allows.
+ */
+final class LowLevelChannelMessageWriter(
+    channel: WritableByteChannel,
+    logger: LoggerSupport
+) extends LowLevelMessageWriter {
+  def write(msg: Message): Future[Ack] = {
+    val protocolMsg = LowLevelMessage.fromMsg(msg)
+    logger.trace(s" --> ${new String(protocolMsg.content, StandardCharsets.UTF_8)}")
 
-  private val baos = new ByteArrayOutputStream()
-  private val headerOut = LowLevelMessageWriter.headerWriter(baos)
-
-  /**
-   * Write a message to the output stream. This method can be called from multiple threads,
-   * but it may block waiting for other threads to finish writing.
-   */
-  def write(msg: Message): Future[Ack] = lock.synchronized {
-    baos.reset()
-    val protocol = LowLevelMessage.fromMsg(msg)
-    logger.trace {
-      val json = new String(protocol.content, StandardCharsets.UTF_8)
-      s" --> $json"
+    val buf = baos.synchronized {
+      baos.reset()
+      LowLevelMessageWriter.writeToByteBuffer(protocolMsg, baos, headerOut)
     }
-    val byteBuffer = LowLevelMessageWriter.write(protocol, baos, headerOut)
-    out.onNext(byteBuffer)
+
+    channel.synchronized { channel.write(buf) }
+    Ack.Continue
+  }
+}
+
+/**
+ * @inheritdoc
+ *
+ * @param out is an byte buffer observer where the writer writes the messages.
+ * @param logger is a logger where we trace messages if level allows.
+ */
+final class LowLevelByteBufferMessageWriter(
+    out: Observer[ByteBuffer],
+    logger: LoggerSupport
+) extends LowLevelMessageWriter {
+  def write(msg: Message): Future[Ack] = {
+    val protocolMsg = LowLevelMessage.fromMsg(msg)
+    logger.trace(s" --> ${new String(protocolMsg.content, StandardCharsets.UTF_8)}")
+
+    val buf = baos.synchronized {
+      baos.reset()
+      LowLevelMessageWriter.writeToByteBuffer(protocolMsg, baos, headerOut)
+    }
+
+    // No need to lock here, downstream observer *must* process `onNext` well in isolation
+    out.onNext(buf)
   }
 }
 
@@ -57,10 +87,28 @@ object LowLevelMessageWriter {
   def write(message: LowLevelMessage): ByteBuffer = {
     val out = new ByteArrayOutputStream()
     val header = headerWriter(out)
-    write(message, out, header)
+    writeToByteBuffer(message, out, header)
   }
 
-  def write(
+  def writeDirectlyToOut(
+      message: LowLevelMessage,
+      out: OutputStream
+  ): Unit = {
+    val headerOut = LowLevelMessageWriter.headerWriter(out)
+    message.header.foreach {
+      case (key, value) =>
+        headerOut.write(key)
+        headerOut.write(": ")
+        headerOut.write(value)
+        headerOut.write("\r\n")
+    }
+    headerOut.write("\r\n")
+    headerOut.flush()
+    out.write(message.content)
+    out.flush()
+  }
+
+  def writeToByteBuffer(
       message: LowLevelMessage,
       out: ByteArrayOutputStream,
       headerOut: PrintWriter

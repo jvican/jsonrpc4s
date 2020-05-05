@@ -164,5 +164,7 @@ object RpcServer {
       services: Services,
       requestScheduler: Scheduler,
       logger: LoggerSupport
-  ): RpcServer = new RpcServer(Left(in), client, services, requestScheduler, logger)
+  ): RpcServer = {
+    new RpcServer(Left(in), client, services, requestScheduler, logger)
+  }
 }

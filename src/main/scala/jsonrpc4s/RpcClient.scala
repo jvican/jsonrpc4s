@@ -11,22 +11,21 @@ import monix.reactive.Observer
 import scala.collection.concurrent.TrieMap
 import scala.concurrent.Future
 import scala.concurrent.duration.Duration
-import MonixEnrichments._
 import scribe.LoggerSupport
 import scala.util.Try
 
 import com.github.plokhotnyuk.jsoniter_scala.core.JsonValueCodec
 import com.github.plokhotnyuk.jsoniter_scala.core.readFromArray
 import com.github.plokhotnyuk.jsoniter_scala.core.writeToArray
+import java.nio.channels.WritableByteChannel
 
-class RpcClient(out: Observer[Message], logger: LoggerSupport) extends RpcActions {
+class RpcClient(
+    out: Observer[Message],
+    logger: LoggerSupport
+) extends RpcActions {
+
   private val counter: AtomicInt = Atomic(1)
   private val activeServerRequests = TrieMap.empty[RequestId, Callback[Throwable, Response]]
-
-  private def toJson[R: JsonValueCodec](r: R): RawJson = RawJson(writeToArray(r))
-  def notify[A: JsonValueCodec](method: String, notification: A): Future[Ack] = {
-    out.onNext(Notification(method, Some(toJson(notification))))
-  }
 
   def serverRespond(response: Response): Future[Ack] = {
     response match {
@@ -50,6 +49,15 @@ class RpcClient(out: Observer[Message], logger: LoggerSupport) extends RpcAction
     } {
       activeServerRequests.remove(id)
       callback.onSuccess(response)
+    }
+  }
+
+  private val notificationsLock = new Object()
+  private def toJson[R: JsonValueCodec](r: R): RawJson = RawJson(writeToArray(r))
+  def notify[A: JsonValueCodec](method: String, notification: A): Future[Ack] = {
+    // Send notifications in the order they are sent by the caller
+    notificationsLock.synchronized {
+      out.onNext(Notification(method, Some(toJson(notification))))
     }
   }
 
@@ -83,8 +91,12 @@ class RpcClient(out: Observer[Message], logger: LoggerSupport) extends RpcAction
 
 object RpcClient {
   def fromOutputStream(out: OutputStream, logger: LoggerSupport): RpcClient = {
-    val bsOut = Observer.bytesToOutputStream(out, logger)
-    val msgOut = Observer.messagesFromByteStream(bsOut, logger)
+    val msgOut = Message.messagesToOutput(Left(out), logger)
+    new RpcClient(msgOut, logger)
+  }
+
+  def fromChannel(channel: WritableByteChannel, logger: LoggerSupport): RpcClient = {
+    val msgOut = Message.messagesToOutput(Right(channel), logger)
     new RpcClient(msgOut, logger)
   }
 }
