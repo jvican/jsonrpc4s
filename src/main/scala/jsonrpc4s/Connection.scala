@@ -6,6 +6,7 @@ import monix.execution.Scheduler
 
 import scribe.Logger
 import scribe.LoggerSupport
+import monix.eval.Task
 
 /**
  * A connection with another JSON-RPC entity.
@@ -42,7 +43,7 @@ object Connection {
       LowLevelMessage.fromInputStream(io.in, serverLogger)
     val client = RpcClient.fromOutputStream(io.out, clientLogger)
     val server = new RpcServer(messages, client, f(client), s, serverLogger)
-    Connection(client, server.startTask.executeAsync.runToFuture)
+    Connection(client, server.startTask(Task.unit).executeAsync.runToFuture)
   }
 
 }

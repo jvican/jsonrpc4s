@@ -136,7 +136,7 @@ class RpcServer protected (
     }
   }
 
-  def startTask: Task[Unit] = {
+  def startTask(afterSubscribe: Task[Unit]): Task[Unit] = {
     def serviceResponse(r: Task[Response]) = {
       r.map {
           case Response.None => ()
@@ -150,9 +150,13 @@ class RpcServer protected (
 
     in match {
       case Left(messages) =>
-        messages.foreachL(msg => serviceResponse(handleValidMessage(msg)))
+        messages
+          .doAfterSubscribe(afterSubscribe)
+          .foreachL(msg => serviceResponse(handleValidMessage(msg)))
       case Right(unparsedMessages) =>
-        unparsedMessages.foreachL(msg => serviceResponse(handleMessage(msg)))
+        unparsedMessages
+          .doAfterSubscribe(afterSubscribe)
+          .foreachL(msg => serviceResponse(handleMessage(msg)))
     }
   }
 }
