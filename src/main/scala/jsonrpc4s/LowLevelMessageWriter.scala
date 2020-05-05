@@ -12,7 +12,7 @@ import monix.reactive.Observer
 import scribe.LoggerSupport
 
 /**
- * A class to write Json RPC messages on an output stream, following the Language Server Protocol.
+ * A class to write JSON-RPC messages to an output stream.
  * It produces the following format:
  *
  * <Header> '\r\n' <Content>
@@ -25,13 +25,13 @@ import scribe.LoggerSupport
  *
  * @note The header part is defined to be ASCII encoded, while the content part is UTF8.
  */
-class MessageWriter(out: Observer[ByteBuffer], logger: LoggerSupport) {
+class LowLevelMessageWriter(out: Observer[ByteBuffer], logger: LoggerSupport) {
 
   /** Lock protecting the output stream, so multiple writes don't mix message chunks. */
   private val lock = new Object
 
   private val baos = new ByteArrayOutputStream()
-  private val headerOut = MessageWriter.headerWriter(baos)
+  private val headerOut = LowLevelMessageWriter.headerWriter(baos)
 
   /**
    * Write a message to the output stream. This method can be called from multiple threads,
@@ -39,30 +39,29 @@ class MessageWriter(out: Observer[ByteBuffer], logger: LoggerSupport) {
    */
   def write(msg: Message): Future[Ack] = lock.synchronized {
     baos.reset()
-    val protocol = BaseProtocolMessage.fromMsg(msg)
+    val protocol = LowLevelMessage.fromMsg(msg)
     logger.trace {
       val json = new String(protocol.content, StandardCharsets.UTF_8)
       s" --> $json"
     }
-    val byteBuffer = MessageWriter.write(protocol, baos, headerOut)
+    val byteBuffer = LowLevelMessageWriter.write(protocol, baos, headerOut)
     out.onNext(byteBuffer)
   }
 }
 
-object MessageWriter {
-
+object LowLevelMessageWriter {
   def headerWriter(out: OutputStream): PrintWriter = {
     new PrintWriter(new OutputStreamWriter(out, StandardCharsets.US_ASCII))
   }
 
-  def write(message: BaseProtocolMessage): ByteBuffer = {
+  def write(message: LowLevelMessage): ByteBuffer = {
     val out = new ByteArrayOutputStream()
     val header = headerWriter(out)
     write(message, out, header)
   }
 
   def write(
-      message: BaseProtocolMessage,
+      message: LowLevelMessage,
       out: ByteArrayOutputStream,
       headerOut: PrintWriter
   ): ByteBuffer = {

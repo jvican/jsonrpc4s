@@ -10,15 +10,18 @@ import scribe.Logger
 import minitest.SimpleTestSuite
 import jsonrpc4s.Request
 import jsonrpc4s.RawJson
-import jsonrpc4s.BaseMessageCodecs.stringCodec
 import jsonrpc4s.RequestId
-import jsonrpc4s.BaseProtocolMessage
-import jsonrpc4s.MessageWriter
+import jsonrpc4s.LowLevelMessage
+import jsonrpc4s.LowLevelMessageWriter
+import com.github.plokhotnyuk.jsoniter_scala.core.JsonValueCodec
+import com.github.plokhotnyuk.jsoniter_scala.macros.JsonCodecMaker
+import com.github.plokhotnyuk.jsoniter_scala.macros.CodecMakerConfig
 
 object BaseProtocolMessageSuite extends SimpleTestSuite {
+  implicit val stringCodec: JsonValueCodec[String] = JsonCodecMaker.make(CodecMakerConfig)
   private val request = Request("method", Some(RawJson.toJson("params")), RequestId(1))
-  private val message = BaseProtocolMessage.fromMsg(request)
-  private val byteArray = MessageWriter.write(message).array()
+  private val message = LowLevelMessage.fromMsg(request)
+  private val byteArray = LowLevelMessageWriter.write(message).array()
   private val byteArrayDouble = byteArray ++ byteArray
   private def bytes = ByteBuffer.wrap(byteArray)
 
@@ -40,9 +43,9 @@ object BaseProtocolMessageSuite extends SimpleTestSuite {
   }
 
   // Emulates a sequence of chunks and returns the parsed protocol messages.
-  def parse(buffers: List[ByteBuffer]): List[BaseProtocolMessage] = {
-    val buf = List.newBuilder[BaseProtocolMessage]
-    val t = BaseProtocolMessage
+  def parse(buffers: List[ByteBuffer]): List[LowLevelMessage] = {
+    val buf = List.newBuilder[LowLevelMessage]
+    val t = LowLevelMessage
       .fromByteBuffers(Observable(buffers: _*), Logger.root)
       // NOTE(olafur) toListL will not work as expected here, it will send onComplete
       // for the first onNext, even when a single ByteBuffer can contain multiple

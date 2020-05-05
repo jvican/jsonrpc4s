@@ -2,11 +2,14 @@ package jsonrpc4s.tests
 
 import minitest.SimpleTestSuite
 import jsonrpc4s.ErrorCode
-import jsonrpc4s.BaseMessageCodecs.intCodec
 import com.github.plokhotnyuk.jsoniter_scala.core.{readFromArray, writeToArray, writeToString}
+import com.github.plokhotnyuk.jsoniter_scala.core.JsonValueCodec
+import com.github.plokhotnyuk.jsoniter_scala.macros.JsonCodecMaker
+import com.github.plokhotnyuk.jsoniter_scala.macros.CodecMakerConfig
 
 object ErrorCodeSuite extends SimpleTestSuite {
 
+  implicit val intCodec: JsonValueCodec[Int] = JsonCodecMaker.make(CodecMakerConfig)
   def check(code: Int, expected: ErrorCode): Unit = {
     test(expected.toString) {
       val obtained = readFromArray[ErrorCode](writeToArray(code))

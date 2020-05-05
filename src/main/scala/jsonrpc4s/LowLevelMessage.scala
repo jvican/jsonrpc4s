@@ -8,7 +8,7 @@ import java.util
 import monix.reactive.Observable
 import scribe.LoggerSupport
 
-final class BaseProtocolMessage(
+final class LowLevelMessage(
     val header: Map[String, String],
     val content: Array[Byte]
 ) {
@@ -16,30 +16,30 @@ final class BaseProtocolMessage(
   override def equals(obj: scala.Any): Boolean =
     this.eq(obj.asInstanceOf[Object]) || {
       obj match {
-        case m: BaseProtocolMessage =>
+        case m: LowLevelMessage =>
           header.equals(m.header) &&
             util.Arrays.equals(content, m.content)
       }
     }
 
   override def toString: String = {
-    val bytes = MessageWriter.write(this)
+    val bytes = LowLevelMessageWriter.write(this)
     StandardCharsets.UTF_8.decode(bytes).toString
   }
 }
 
-object BaseProtocolMessage {
+object LowLevelMessage {
   import com.github.plokhotnyuk.jsoniter_scala.core.writeToArray
 
-  def fromMsg(msg: Message): BaseProtocolMessage = fromBytes(writeToArray(msg))
-  def fromBytes(bytes: Array[Byte]): BaseProtocolMessage = {
-    new BaseProtocolMessage(Map("Content-Length" -> bytes.length.toString), bytes)
+  def fromMsg(msg: Message): LowLevelMessage = fromBytes(writeToArray(msg))
+  def fromBytes(bytes: Array[Byte]): LowLevelMessage = {
+    new LowLevelMessage(Map("Content-Length" -> bytes.length.toString), bytes)
   }
 
   def fromInputStream(
       in: InputStream,
       logger: LoggerSupport
-  ): Observable[BaseProtocolMessage] = {
+  ): Observable[LowLevelMessage] = {
     // FIXME: Use bracket to handle this resource correctly if something fails
     fromBytes(Observable.fromInputStreamUnsafe(in), logger)
   }
@@ -47,12 +47,12 @@ object BaseProtocolMessage {
   def fromBytes(
       in: Observable[Array[Byte]],
       logger: LoggerSupport
-  ): Observable[BaseProtocolMessage] =
+  ): Observable[LowLevelMessage] =
     fromByteBuffers(in.map(ByteBuffer.wrap), logger)
 
   def fromByteBuffers(
       in: Observable[ByteBuffer],
       logger: LoggerSupport
-  ): Observable[BaseProtocolMessage] =
-    in.executeAsync.liftByOperator(new BaseProtocolMessageParser(logger))
+  ): Observable[LowLevelMessage] =
+    in.executeAsync.liftByOperator(new LowLevelMessageParser(logger))
 }

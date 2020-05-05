@@ -10,10 +10,10 @@ import monix.reactive.Observable.Operator
 import monix.reactive.observers.Subscriber
 import scribe.LoggerSupport
 
-final class BaseProtocolMessageParser(logger: LoggerSupport)
-    extends Operator[ByteBuffer, BaseProtocolMessage] {
+final class LowLevelMessageParser(logger: LoggerSupport)
+    extends Operator[ByteBuffer, LowLevelMessage] {
   override def apply(
-      out: Subscriber[BaseProtocolMessage]
+      out: Subscriber[LowLevelMessage]
   ): Subscriber[ByteBuffer] = {
     new Subscriber[ByteBuffer] {
       import Ack._
@@ -83,7 +83,7 @@ final class BaseProtocolMessageParser(logger: LoggerSupport)
           data.copyToArray(contentBytes)
           data.remove(0, contentLength)
           contentLength = -1
-          val message = new BaseProtocolMessage(header, contentBytes)
+          val message = new LowLevelMessage(header, contentBytes)
           out.onNext(message).flatMap {
             case Continue => readHeaders()
             case Stop => Stop

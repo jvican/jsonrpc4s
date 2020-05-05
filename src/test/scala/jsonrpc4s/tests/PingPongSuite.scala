@@ -7,10 +7,12 @@ import scala.jdk.CollectionConverters._
 import scala.concurrent.Promise
 import scribe.Logger
 import jsonrpc4s.Endpoint
-import jsonrpc4s.BaseMessageCodecs.stringCodec
 import jsonrpc4s.Services
 import jsonrpc4s.RpcClient
 import jsonrpc4s.testkit.TestConnection
+import com.github.plokhotnyuk.jsoniter_scala.core.JsonValueCodec
+import com.github.plokhotnyuk.jsoniter_scala.macros.JsonCodecMaker
+import com.github.plokhotnyuk.jsoniter_scala.macros.CodecMakerConfig
 
 /**
  * Tests the following sequence:
@@ -38,6 +40,7 @@ import jsonrpc4s.testkit.TestConnection
  */
 object PingPongSuite extends SimpleTestSuite {
 
+  implicit val stringCodec: JsonValueCodec[String] = JsonCodecMaker.make(CodecMakerConfig)
   private val Ping = Endpoint.notification[String]("ping")
   private val Pong = Endpoint.notification[String]("pong")
   private val Hello = Endpoint.request[String, String]("hello")

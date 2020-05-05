@@ -4,31 +4,29 @@ import monix.eval.Task
 import monix.execution.Scheduler
 import monix.reactive.Observable
 import scala.collection.concurrent.TrieMap
-import scala.concurrent.Await
-import scala.concurrent.duration.Duration
 import scala.util.control.NonFatal
 import scala.util.{Try, Success, Failure}
 import scribe.LoggerSupport
 import com.github.plokhotnyuk.jsoniter_scala.core.readFromArray
 import monix.execution.CancelableFuture
 
-final class RpcServer private (
-    in: Either[Observable[Message], Observable[BaseProtocolMessage]],
+class RpcServer protected (
+    in: Either[Observable[Message], Observable[LowLevelMessage]],
     client: RpcClient,
     services: Services,
     requestScheduler: Scheduler,
     logger: LoggerSupport
 ) {
   def this(
-      in: Observable[BaseProtocolMessage],
+      in: Observable[LowLevelMessage],
       client: RpcClient,
       services: Services,
       requestScheduler: Scheduler,
       logger: LoggerSupport
   ) = this(Right(in), client, services, requestScheduler, logger)
 
-  private val activeClientRequests: TrieMap[RequestId, CancelableFuture[Response]] = TrieMap.empty
-  private val cancelNotification = {
+  protected val activeClientRequests: TrieMap[RequestId, CancelableFuture[Response]] = TrieMap.empty
+  protected val cancelNotification = {
     Service.notification[CancelParams]("$/cancelRequest", logger) {
       new Service[CancelParams, Unit] {
         def handle(params: CancelParams): Task[Unit] = {
@@ -55,74 +53,83 @@ final class RpcServer private (
     }
   }
 
-  private val handlersByMethodName: Map[String, NamedJsonRpcService] =
+  protected val handlersByMethodName: Map[String, NamedJsonRpcService] =
     services.addService(cancelNotification).byMethodName
 
-  def cancelAllRequests(): Unit = {
-    activeClientRequests.values.foreach { cancelable =>
-      cancelable.cancel()
-    }
-  }
+  def cancelActiveClientRequests(): Unit =
+    activeClientRequests.values.foreach(_.cancel())
 
-  def awaitRunningTasks: Task[Unit] = {
+  def waitForActiveClientRequests: Task[Unit] = {
     val futures = activeClientRequests.values.map(fut => Task.fromFuture(fut))
     // Await until completion and ignore task results
     Task.gatherUnordered(futures).materialize.map(_ => ())
   }
 
-  def handleValidMessage(message: Message): Task[Response] = message match {
-    case response: Response =>
-      Task.evalAsync {
-        client.clientRespond(response)
-        Response.None
-      }
-    case Notification(method, _, _) =>
-      handlersByMethodName.get(method) match {
-        case None =>
-          Task.evalAsync {
-            // Can't respond to invalid notifications
-            logger.error(s"Unknown method '$method'")
-            Response.None
-          }
-        case Some(handler) =>
-          handler
-            .handle(message)
-            .map {
-              case Response.None => Response.None
-              case nonEmpty =>
-                logger.error(
-                  s"Obtained non-empty response $nonEmpty for notification $message. " +
-                    s"Expected Response.empty"
-                )
-                Response.None
-            }
-            .onErrorRecover {
-              case NonFatal(e) =>
-                logger.error(s"Error handling notification $message", e)
-                Response.None
-            }
-      }
-    case request @ Request(method, _, id, _) =>
-      handlersByMethodName.get(method) match {
-        case None =>
-          Task.evalAsync {
-            logger.info(s"Method not found '$method'")
-            Response.methodNotFound(method, id)
-          }
-        case Some(handler) =>
-          val response = handler.handle(request).onErrorRecover {
-            case NonFatal(e) =>
-              logger.error(s"Unhandled error handling request $request", e)
-              Response.internalError(e.getMessage, request.id)
-          }
-          val runningResponse = response.runToFuture(requestScheduler)
-          activeClientRequests.put(request.id, runningResponse)
-          Task.fromFuture(runningResponse)
-      }
-
+  protected def handleResponse(response: Response): Task[Response] = {
+    Task.evalAsync {
+      client.clientRespond(response)
+      Response.None
+    }
   }
 
-  def handleMessage(message: BaseProtocolMessage): Task[Response] = {
+  protected def handleRequest(request: Request): Task[Response] = {
+    val Request(method, _, id, _) = request
+    handlersByMethodName.get(method) match {
+      case None =>
+        Task.eval {
+          logger.info(s"Method not found '$method'")
+          Response.methodNotFound(method, id)
+        }
+
+      case Some(handler) =>
+        val response = handler.handle(request).onErrorRecover {
+          case NonFatal(e) =>
+            logger.error(s"Unhandled JSON-RPC error handling request $request", e)
+            Response.internalError(e.getMessage, request.id)
+        }
+        val runningResponse = response.runToFuture(requestScheduler)
+        activeClientRequests.put(request.id, runningResponse)
+        Task.fromFuture(runningResponse)
+    }
+  }
+
+  protected def handleNotification(notification: Notification): Task[Response] = {
+    val Notification(method, _, _) = notification
+    handlersByMethodName.get(method) match {
+      case None =>
+        Task.eval {
+          // Can't respond to invalid notifications
+          logger.error(s"Unknown method '$method'")
+          Response.None
+        }
+
+      case Some(handler) =>
+        val response = handler
+          .handle(notification)
+          .onErrorRecover {
+            case NonFatal(e) =>
+              logger.error(s"Error handling notification $notification", e)
+              Response.None
+          }
+
+        response.map {
+          case Response.None => Response.None
+          case nonEmpty =>
+            logger.error(s"Obtained non-empty response $nonEmpty for notification $notification!")
+            Response.None
+        }
+    }
+  }
+
+  protected def handleValidMessage(message: Message): Task[Response] = {
+    message match {
+      case response: Response => handleResponse(response)
+      case notification: Notification => handleNotification(notification)
+      case request: Request => handleRequest(request)
+    }
+  }
+
+  protected def handleMessage(message: LowLevelMessage): Task[Response] = {
     Try(readFromArray[Message](message.content)) match {
       case Success(msg) => handleValidMessage(msg)
       case Failure(err) => Task.now(Response.parseError(err.toString))
@@ -136,8 +143,7 @@ final class RpcServer private (
           case response => client.serverRespond(response)
         }
         .onErrorRecover {
-          case NonFatal(e) =>
-            logger.error("Unhandled error", e)
+          case NonFatal(e) => logger.error("Unhandled error responding to JSON-RPC client", e)
         }
         .runToFuture(requestScheduler)
     }
@@ -148,12 +154,6 @@ final class RpcServer private (
       case Right(unparsedMessages) =>
         unparsedMessages.foreachL(msg => serviceResponse(handleMessage(msg)))
     }
-  }
-
-  def listen(): Unit = {
-    val f = startTask.runToFuture(requestScheduler)
-    logger.info("Listening....")
-    Await.result(f, Duration.Inf)
   }
 }
 

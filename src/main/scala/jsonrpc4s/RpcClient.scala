@@ -14,6 +14,7 @@ import scala.concurrent.duration.Duration
 import MonixEnrichments._
 import scribe.LoggerSupport
 import scala.util.Try
+
 import com.github.plokhotnyuk.jsoniter_scala.core.JsonValueCodec
 import com.github.plokhotnyuk.jsoniter_scala.core.readFromArray
 import com.github.plokhotnyuk.jsoniter_scala.core.writeToArray
@@ -23,7 +24,6 @@ class RpcClient(out: Observer[Message], logger: LoggerSupport) extends RpcAction
   private val activeServerRequests = TrieMap.empty[RequestId, Callback[Throwable, Response]]
 
   private def toJson[R: JsonValueCodec](r: R): RawJson = RawJson(writeToArray(r))
-
   def notify[A: JsonValueCodec](method: String, notification: A): Future[Ack] = {
     out.onNext(Notification(method, Some(toJson(notification))))
   }
@@ -32,12 +32,11 @@ class RpcClient(out: Observer[Message], logger: LoggerSupport) extends RpcAction
     response match {
       case Response.None => Ack.Continue
       case x: Response.Success => out.onNext(x)
-      case x: Response.Error =>
-        //logger.error(s"Response error: $x")
-        out.onNext(x)
+      case x: Response.Error => out.onNext(x)
     }
   }
-  def clientRespond(response: Response): Unit =
+
+  def clientRespond(response: Response): Unit = {
     for {
       id <- response match {
         case Response.None => Some(RequestId.Null)
@@ -52,6 +51,7 @@ class RpcClient(out: Observer[Message], logger: LoggerSupport) extends RpcAction
       activeServerRequests.remove(id)
       callback.onSuccess(response)
     }
+  }
 
   def request[A: JsonValueCodec, B: JsonValueCodec](
       method: String,
@@ -83,7 +83,7 @@ class RpcClient(out: Observer[Message], logger: LoggerSupport) extends RpcAction
 
 object RpcClient {
   def fromOutputStream(out: OutputStream, logger: LoggerSupport): RpcClient = {
-    val bsOut = Observer.fromOutputStream(out, logger)
+    val bsOut = Observer.bytesToOutputStream(out, logger)
     val msgOut = Observer.messagesFromByteStream(bsOut, logger)
     new RpcClient(msgOut, logger)
   }
