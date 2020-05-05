@@ -42,12 +42,11 @@ class RpcClient(
         case Response.Success(_, requestId, jsonrpc) => Some(requestId)
         case Response.Error(_, requestId, jsonrpc) => Some(requestId)
       }
-      callback <- activeServerRequests.get(id).orElse {
+      callback <- activeServerRequests.remove(id).orElse {
         logger.error(s"Response to unknown request: $response")
         None
       }
     } {
-      activeServerRequests.remove(id)
       callback.onSuccess(response)
     }
   }
@@ -77,6 +76,7 @@ class RpcClient(
         this.notify("$/cancelRequest", CancelParams(nextId))
       }
     }
+
     response.map {
       // This case can never happen given that no response isn't a valid JSON-RPC message
       case Response.None => sys.error("Fatal error: obtained `Response.None`!")
