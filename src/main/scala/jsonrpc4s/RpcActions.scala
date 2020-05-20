@@ -4,7 +4,7 @@ import monix.eval.Task
 import monix.execution.Ack
 
 import scala.concurrent.Future
-import com.github.plokhotnyuk.jsoniter_scala.core.writeToArray
+import com.github.plokhotnyuk.jsoniter_scala.core.writeToString
 import com.github.plokhotnyuk.jsoniter_scala.core.WriterConfig
 
 /** Represents a response for a client RPC request.  */
@@ -35,7 +35,7 @@ final case class RpcFailure[T](
 
 object RpcFailure {
   def toMsg(methodName: String, err: Response.Error): String = {
-    val errMsg = writeToArray(err, config = WriterConfig.withIndentionStep(4))
+    val errMsg = writeToString(err, config = WriterConfig.withIndentionStep(4))
     s"Unexpected error when calling '$methodName': $errMsg"
   }
 }
