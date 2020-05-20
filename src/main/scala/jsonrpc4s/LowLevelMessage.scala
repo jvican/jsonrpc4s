@@ -31,9 +31,12 @@ final class LowLevelMessage(
 object LowLevelMessage {
   import com.github.plokhotnyuk.jsoniter_scala.core.writeToArray
 
-  def fromMsg(msg: Message): LowLevelMessage = fromBytes(writeToArray(msg))
-  def fromBytes(bytes: Array[Byte]): LowLevelMessage = {
-    new LowLevelMessage(Map("Content-Length" -> bytes.length.toString), bytes)
+  def fromMsg(msg: Message): LowLevelMessage = fromBytes(msg.headers, writeToArray(msg))
+  def fromBytes(userHeaders: Map[String, String], bytes: Array[Byte]): LowLevelMessage = {
+    val headers = userHeaders.filterNot {
+      case (key, _) => key.toLowerCase == "content-length"
+    } + ("Content-Length" -> bytes.length.toString)
+    new LowLevelMessage(headers, bytes)
   }
 
   def fromInputStream(
@@ -47,13 +50,14 @@ object LowLevelMessage {
   def fromBytes(
       in: Observable[Array[Byte]],
       logger: LoggerSupport
-  ): Observable[LowLevelMessage] =
+  ): Observable[LowLevelMessage] = {
     fromByteBuffers(in.map(ByteBuffer.wrap), logger)
+  }
 
   def fromByteBuffers(
       in: Observable[ByteBuffer],
       logger: LoggerSupport
   ): Observable[LowLevelMessage] = {
-    in.executeAsync.liftByOperator(new LowLevelMessageParser(logger))
+    in.executeAsync.liftByOperator(new LowLevelMessageReader(logger))
   }
 }

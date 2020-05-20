@@ -13,14 +13,21 @@ import com.github.plokhotnyuk.jsoniter_scala.core.JsonWriter
 class Endpoint[A, B](
     val method: String
 )(implicit val codecA: JsonValueCodec[A], val codecB: JsonValueCodec[B]) {
-  def request(request: A)(
-      implicit client: RpcActions
-  ): Task[Either[Response.Error, B]] =
-    client.request[A, B](method, request)
+  def request(
+      request: A,
+      headers: Map[String, String] = Map.empty
+  )(implicit client: RpcActions): Task[RpcResponse[B]] = {
+    client.request[A, B](this, request, headers)
+  }
+
   def notify(
-      notification: A
-  )(implicit client: RpcActions): Future[Ack] =
-    client.notify[A](method, notification)
+      notification: A,
+      headers: Map[String, String] = Map.empty
+  )(implicit client: RpcActions, ev: B =:= Unit): Future[Ack] = {
+    // Safe to do because of `ev` proving that B == Unit at compile time
+    val safeThis = this.asInstanceOf[Endpoint[A, Unit]]
+    client.notify[A](safeThis, notification, headers)
+  }
 }
 
 object Endpoint {

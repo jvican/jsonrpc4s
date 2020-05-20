@@ -24,8 +24,11 @@ class RpcClient(
     logger: LoggerSupport
 ) extends RpcActions {
 
-  private val counter: AtomicInt = Atomic(1)
-  private val activeServerRequests = TrieMap.empty[RequestId, Callback[Throwable, Response]]
+  protected val counter: AtomicInt = Atomic(1)
+  protected val activeServerRequests = TrieMap.empty[RequestId, Callback[Throwable, Response]]
+
+  protected val notificationsLock = new Object()
+  protected def toJson[R: JsonValueCodec](r: R): RawJson = RawJson(writeToArray(r))
 
   def serverRespond(response: Response): Future[Ack] = {
     response match {
@@ -39,8 +42,8 @@ class RpcClient(
     for {
       id <- response match {
         case Response.None => Some(RequestId.Null)
-        case Response.Success(_, requestId, jsonrpc) => Some(requestId)
-        case Response.Error(_, requestId, jsonrpc) => Some(requestId)
+        case Response.Success(_, requestId, jsonrpc, _) => Some(requestId)
+        case Response.Error(_, requestId, jsonrpc, _) => Some(requestId)
       }
       callback <- activeServerRequests.remove(id).orElse {
         logger.error(s"Response to unknown request: $response")
@@ -51,40 +54,53 @@ class RpcClient(
     }
   }
 
-  private val notificationsLock = new Object()
-  private def toJson[R: JsonValueCodec](r: R): RawJson = RawJson(writeToArray(r))
-  def notify[A: JsonValueCodec](method: String, notification: A): Future[Ack] = {
+  def notify[A](
+      endpoint: Endpoint[A, Unit],
+      params: A,
+      headers: Map[String, String] = Map.empty
+  ): Future[Ack] = {
+    import endpoint.codecA
+    val msg = Notification(endpoint.method, Some(toJson(params)), headers)
+
     // Send notifications in the order they are sent by the caller
     notificationsLock.synchronized {
-      out.onNext(Notification(method, Some(toJson(notification))))
+      out.onNext(msg)
     }
   }
 
-  def request[A: JsonValueCodec, B: JsonValueCodec](
-      method: String,
-      request: A
-  ): Task[Either[Response.Error, B]] = {
-    val nextId = RequestId(counter.incrementAndGet())
+  def request[A, B](
+      endpoint: Endpoint[A, B],
+      params: A,
+      headers: Map[String, String] = Map.empty
+  ): Task[RpcResponse[B]] = {
+    import endpoint.{codecA, codecB}
+    val reqId = RequestId(counter.incrementAndGet())
     val response = Task.create[Response] { (s, cb) =>
       val scheduled = s.scheduleOnce(Duration(0, "s")) {
-        val json = Request(method, Some(toJson(request)), nextId)
-        activeServerRequests.put(nextId, cb)
+        val json = Request(endpoint.method, Some(toJson(params)), reqId, headers)
+        activeServerRequests.put(reqId, cb)
         out.onNext(json)
       }
+
       Cancelable { () =>
         scheduled.cancel()
-        this.notify("$/cancelRequest", CancelParams(nextId))
+        val cancellation = Response.cancelled(reqId)
+        val cancelledErr = RpcFailure(endpoint.method, cancellation)
+        activeServerRequests.remove(reqId).foreach(_.onError(cancelledErr))
+        this.notify(RpcActions.cancelRequest, CancelParams(reqId))
       }
     }
 
     response.map {
       // This case can never happen given that no response isn't a valid JSON-RPC message
       case Response.None => sys.error("Fatal error: obtained `Response.None`!")
-      case err: Response.Error => Left(err)
-      case Response.Success(result, _, _) =>
-        Try(readFromArray[B](result.value)).toEither.left.map(err =>
-          Response.invalidParams(err.toString, nextId)
-        )
+      case err: Response.Error => RpcFailure(endpoint.method, err)
+      case suc: Response.Success =>
+        Try(readFromArray[B](suc.result.value)).toEither match {
+          case Right(value) => RpcSuccess(value, suc)
+          case Left(err) =>
+            RpcFailure(endpoint.method, Response.invalidParams(err.toString, reqId))
+        }
     }
   }
 }

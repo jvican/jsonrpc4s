@@ -10,7 +10,7 @@ import monix.reactive.Observable.Operator
 import monix.reactive.observers.Subscriber
 import scribe.LoggerSupport
 
-final class LowLevelMessageParser(logger: LoggerSupport)
+final class LowLevelMessageReader(logger: LoggerSupport)
     extends Operator[ByteBuffer, LowLevelMessage] {
   override def apply(
       out: Subscriber[LowLevelMessage]
@@ -42,7 +42,7 @@ final class LowLevelMessageParser(logger: LoggerSupport)
             data.copyToArray(bytes)
             data.remove(0, i + 4)
             val headers = new String(bytes, StandardCharsets.US_ASCII)
-            // Parse other headers in JSON-RPC messages even if we only use `Content-Length` beloww
+            // Parse other headers in JSON-RPC messages even if we only use `Content-Length` below
             val pairs: Map[String, String] = headers
               .split("\r\n")
               .iterator

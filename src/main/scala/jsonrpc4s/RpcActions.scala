@@ -4,39 +4,74 @@ import monix.eval.Task
 import monix.execution.Ack
 
 import scala.concurrent.Future
-import com.github.plokhotnyuk.jsoniter_scala.core.JsonValueCodec
+import com.github.plokhotnyuk.jsoniter_scala.core.writeToArray
+import com.github.plokhotnyuk.jsoniter_scala.core.WriterConfig
+
+/** Represents a response for a client RPC request.  */
+sealed trait RpcResponse[T]
+
+/**
+ * Represents a successful client RPC request.
+ *
+ * @param value is the value that was successfully serialized from `underlying`.
+ * @param underlying is the underlying JSON-RPC message where the value comes from.
+ */
+final case class RpcSuccess[T](
+    value: T,
+    underlying: jsonrpc4s.Response.Success
+) extends RpcResponse[T]
+
+/**
+ * Represents a failed client RPC request.
+ *
+ * @param methodName is the name of the method that failed to complete.
+ * @param underlying is the underlying JSON-RPC error message.
+ */
+final case class RpcFailure[T](
+    methodName: String,
+    underlying: jsonrpc4s.Response.Error
+) extends RuntimeException(RpcFailure.toMsg(methodName, underlying))
+    with RpcResponse[T]
+
+object RpcFailure {
+  def toMsg(methodName: String, err: Response.Error): String = {
+    val errMsg = writeToArray(err, config = WriterConfig.withIndentionStep(4))
+    s"Unexpected error when calling '$methodName': $errMsg"
+  }
+}
 
 trait RpcActions {
-  final def notify[A](
-      endpoint: Endpoint[A, Unit],
-      notification: A
-  ): Future[Ack] = notify[A](endpoint.method, notification)(endpoint.codecA)
-  def notify[A: JsonValueCodec](method: String, notification: A): Future[Ack]
   def serverRespond(response: Response): Future[Ack]
   def clientRespond(response: Response): Unit
 
-  final def request[A, B](
-      endpoint: Endpoint[A, B],
-      req: A
-  ): Task[Either[Response.Error, B]] =
-    request[A, B](endpoint.method, req)(endpoint.codecA, endpoint.codecB)
+  def notify[A](
+      endpoint: Endpoint[A, Unit],
+      notification: A,
+      headers: Map[String, String] = Map.empty
+  ): Future[Ack]
 
-  def request[A: JsonValueCodec, B: JsonValueCodec](
-      method: String,
-      request: A
-  ): Task[Either[Response.Error, B]]
+  def request[A, B](
+      endpoint: Endpoint[A, B],
+      request: A,
+      headers: Map[String, String] = Map.empty
+  ): Task[RpcResponse[B]]
 }
 
 object RpcActions {
-  val empty: RpcActions = new RpcActions {
-    override def request[A: JsonValueCodec, B: JsonValueCodec](
-        method: String,
-        request: A
-    ): Task[Either[Response.Error, B]] = Task.never
+  import Endpoint.unitCodec
+  object cancelRequest extends Endpoint[CancelParams, Unit]("$/cancelRequest")
 
-    override def notify[A: JsonValueCodec](
-        method: String,
-        notification: A
+  val empty: RpcActions = new RpcActions {
+    override def request[A, B](
+        endpoint: Endpoint[A, B],
+        request: A,
+        headers: Map[String, String] = Map.empty
+    ): Task[RpcResponse[B]] = Task.never
+
+    override def notify[A](
+        endpoint: Endpoint[A, Unit],
+        notification: A,
+        headers: Map[String, String] = Map.empty
     ): Future[Ack] = Ack.Continue
 
     override def serverRespond(response: Response): Future[Ack] = Ack.Continue

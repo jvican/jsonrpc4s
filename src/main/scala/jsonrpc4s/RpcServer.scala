@@ -27,7 +27,7 @@ class RpcServer protected (
 
   protected val activeClientRequests: TrieMap[RequestId, CancelableFuture[Response]] = TrieMap.empty
   protected val cancelNotification = {
-    Service.notification[CancelParams]("$/cancelRequest", logger) {
+    Service.notification(RpcActions.cancelRequest, logger) {
       new Service[CancelParams, Unit] {
         def handle(params: CancelParams): Task[Unit] = {
           val id = params.id
@@ -73,7 +73,7 @@ class RpcServer protected (
   }
 
   protected def handleRequest(request: Request): Task[Response] = {
-    val Request(method, _, id, _) = request
+    val Request(method, _, id, _, _) = request
     handlersByMethodName.get(method) match {
       case None =>
         Task.eval {
@@ -94,7 +94,7 @@ class RpcServer protected (
   }
 
   protected def handleNotification(notification: Notification): Task[Response] = {
-    val Notification(method, _, _) = notification
+    val Notification(method, _, _, _) = notification
     handlersByMethodName.get(method) match {
       case None =>
         Task.eval {
@@ -130,8 +130,13 @@ class RpcServer protected (
   }
 
   protected def handleMessage(message: LowLevelMessage): Task[Response] = {
+    // Make sure we propagate headers from the transport to the read message before handling
     Try(readFromArray[Message](message.content)) match {
-      case Success(msg) => handleValidMessage(msg)
+      case Success(msg: Request) => handleValidMessage(msg.copy(headers = message.header))
+      case Success(msg: Notification) => handleValidMessage(msg.copy(headers = message.header))
+      case Success(msg: Response.Error) => handleValidMessage(msg.copy(headers = message.header))
+      case Success(msg: Response.Success) => handleValidMessage(msg.copy(headers = message.header))
+      case Success(msg @ Response.None) => handleValidMessage(msg)
       case Failure(err) => Task.now(Response.parseError(err.toString))
     }
   }

@@ -25,12 +25,9 @@ object Connection {
 
   def simple(io: InputOutput, name: String)(
       f: RpcClient => Services
-  )(implicit s: Scheduler): Connection =
-    Connection(
-      io,
-      Logger(s"$name-server"),
-      Logger(s"$name-client")
-    )(f)
+  )(implicit s: Scheduler): Connection = {
+    Connection(io, Logger(s"$name-server"), Logger(s"$name-client"))(f)
+  }
 
   def apply(
       io: InputOutput,
@@ -39,11 +36,9 @@ object Connection {
   )(
       f: RpcClient => Services
   )(implicit s: Scheduler): Connection = {
-    val messages =
-      LowLevelMessage.fromInputStream(io.in, serverLogger)
+    val messages = LowLevelMessage.fromInputStream(io.in, serverLogger)
     val client = RpcClient.fromOutputStream(io.out, clientLogger)
     val server = new RpcServer(messages, client, f(client), s, serverLogger)
     Connection(client, server.startTask(Task.unit).executeAsync.runToFuture)
   }
-
 }

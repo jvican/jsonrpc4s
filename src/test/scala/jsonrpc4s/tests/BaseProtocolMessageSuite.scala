@@ -19,7 +19,13 @@ import com.github.plokhotnyuk.jsoniter_scala.macros.CodecMakerConfig
 
 object BaseProtocolMessageSuite extends SimpleTestSuite {
   implicit val stringCodec: JsonValueCodec[String] = JsonCodecMaker.make(CodecMakerConfig)
-  private val request = Request("method", Some(RawJson.toJson("params")), RequestId(1))
+  private val request = Request(
+    "method",
+    Some(RawJson.toJson("params")),
+    RequestId(1),
+    Map("Custom-Header" -> "custom-value")
+  )
+
   private val message = LowLevelMessage.fromMsg(request)
   private val byteArray = LowLevelMessageWriter.write(message).array()
   private val byteArrayDouble = byteArray ++ byteArray
@@ -28,7 +34,8 @@ object BaseProtocolMessageSuite extends SimpleTestSuite {
   test("toString") {
     assertEquals(
       message.toString.replaceAll("\r\n", "\n"),
-      """|Content-Length: 60
+      """|Custom-Header: custom-value
+         |Content-Length: 60
          |
          |{"method":"method","params":"params","id":1,"jsonrpc":"2.0"}""".stripMargin
         .replaceAll("\r\n", "\n")

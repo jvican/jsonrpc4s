@@ -43,7 +43,12 @@ final class LowLevelChannelMessageWriter(
 ) extends LowLevelMessageWriter {
   def write(msg: Message): Future[Ack] = {
     val protocolMsg = LowLevelMessage.fromMsg(msg)
-    logger.trace(s" --> ${new String(protocolMsg.content, StandardCharsets.UTF_8)}")
+    logger.trace(
+      s"""
+         |  --> header: ${protocolMsg.header.mkString(", ")}
+         |  --> content: ${new String(protocolMsg.content, StandardCharsets.UTF_8)}
+       """.stripMargin
+    )
 
     val buf = baos.synchronized {
       baos.reset()
