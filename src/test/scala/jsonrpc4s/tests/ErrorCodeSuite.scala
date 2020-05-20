@@ -23,6 +23,7 @@ object ErrorCodeSuite extends SimpleTestSuite {
   check(-32000, ErrorCode.Unknown(-32000))
   check(-32099, ErrorCode.Unknown(-32099))
   ErrorCode.builtin.foreach { code =>
+    // Check code is same
     check(code.value, code)
   }
 }
