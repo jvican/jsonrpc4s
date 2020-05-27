@@ -36,9 +36,11 @@ object Connection {
   )(
       f: RpcClient => Services
   )(implicit s: Scheduler): Connection = {
-    val messages = LowLevelMessage.fromInputStream(io.in, serverLogger)
+    val messages = LowLevelMessage
+      .fromInputStream(io.in, serverLogger)
+      .mapEval(msg => Task(LowLevelMessage.toMsg(msg)))
     val client = RpcClient.fromOutputStream(io.out, clientLogger)
-    val server = new RpcServer(messages, client, f(client), s, serverLogger)
+    val server = RpcServer(messages, client, f(client), s, serverLogger)
     Connection(client, server.startTask(Task.unit).executeAsync.runToFuture)
   }
 }

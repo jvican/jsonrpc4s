@@ -105,3 +105,22 @@ final class LowLevelMessageReader(logger: LoggerSupport)
     }
   }
 }
+
+object LowLevelMessageReader {
+  def readValidMessage(
+      out: Subscriber[Message],
+      logger: LoggerSupport
+  ): Subscriber[ByteBuffer] = {
+    out.scheduler
+    val sub = new Subscriber[LowLevelMessage] {
+      def onError(err: Throwable): Unit = out.onError(err)
+      def onComplete(): Unit = out.onComplete()
+      def scheduler: Scheduler = out.scheduler
+      def onNext(msg: LowLevelMessage): Future[Ack] = {
+        out.onNext(LowLevelMessage.toMsg(msg))
+      }
+    }
+
+    new LowLevelMessageReader(logger)(sub)
+  }
+}

@@ -5,26 +5,16 @@ import monix.execution.Scheduler
 import monix.reactive.Observable
 import scala.collection.concurrent.TrieMap
 import scala.util.control.NonFatal
-import scala.util.{Try, Success, Failure}
 import scribe.LoggerSupport
-import com.github.plokhotnyuk.jsoniter_scala.core.readFromArray
 import monix.execution.CancelableFuture
 
 class RpcServer protected (
-    in: Either[Observable[Message], Observable[LowLevelMessage]],
+    in: Observable[Message],
     client: RpcClient,
     services: Services,
     requestScheduler: Scheduler,
     logger: LoggerSupport
 ) {
-  def this(
-      in: Observable[LowLevelMessage],
-      client: RpcClient,
-      services: Services,
-      requestScheduler: Scheduler,
-      logger: LoggerSupport
-  ) = this(Right(in), client, services, requestScheduler, logger)
-
   protected val activeClientRequests: TrieMap[RequestId, CancelableFuture[Response]] = TrieMap.empty
   protected val cancelNotification = {
     Service.notification(RpcActions.cancelRequest, logger) {
@@ -129,40 +119,19 @@ class RpcServer protected (
     }
   }
 
-  protected def handleMessage(message: LowLevelMessage): Task[Response] = {
-    // Make sure we propagate headers from the transport to the read message before handling
-    Try(readFromArray[Message](message.content)) match {
-      case Success(msg: Request) => handleValidMessage(msg.copy(headers = message.header))
-      case Success(msg: Notification) => handleValidMessage(msg.copy(headers = message.header))
-      case Success(msg: Response.Error) => handleValidMessage(msg.copy(headers = message.header))
-      case Success(msg: Response.Success) => handleValidMessage(msg.copy(headers = message.header))
-      case Success(msg @ Response.None) => handleValidMessage(msg)
-      case Failure(err) => Task.now(Response.parseError(err.toString))
-    }
-  }
-
   def startTask(afterSubscribe: Task[Unit]): Task[Unit] = {
-    def serviceResponse(r: Task[Response]) = {
-      r.map {
-          case Response.None => ()
-          case response => client.serverRespond(response)
-        }
-        .onErrorRecover {
-          case NonFatal(e) => logger.error("Unhandled error responding to JSON-RPC client", e)
-        }
-        .runToFuture(requestScheduler)
-    }
-
-    in match {
-      case Left(messages) =>
-        messages
-          .doAfterSubscribe(afterSubscribe)
-          .foreachL(msg => serviceResponse(handleValidMessage(msg)))
-      case Right(unparsedMessages) =>
-        unparsedMessages
-          .doAfterSubscribe(afterSubscribe)
-          .foreachL(msg => serviceResponse(handleMessage(msg)))
-    }
+    in.doAfterSubscribe(afterSubscribe)
+      .foreachL { msg =>
+        handleValidMessage(msg)
+          .map {
+            case Response.None => ()
+            case response => client.serverRespond(response)
+          }
+          .onErrorRecover {
+            case NonFatal(e) => logger.error("Unhandled error responding to JSON-RPC client", e)
+          }
+          .runToFuture(requestScheduler)
+      }
   }
 }
 
@@ -174,6 +143,6 @@ object RpcServer {
       requestScheduler: Scheduler,
       logger: LoggerSupport
   ): RpcServer = {
-    new RpcServer(Left(in), client, services, requestScheduler, logger)
+    new RpcServer(in, client, services, requestScheduler, logger)
   }
 }
