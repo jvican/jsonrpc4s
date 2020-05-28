@@ -20,8 +20,6 @@ import com.github.plokhotnyuk.jsoniter_scala.core.JsonReader
 import com.github.plokhotnyuk.jsoniter_scala.core.WriterConfig
 import java.io.StringWriter
 import java.io.PrintWriter
-import java.io.InputStream
-import monix.reactive.Observable
 
 sealed trait Message {
   def jsonrpc: String

@@ -16,6 +16,7 @@ import jsonrpc4s.LowLevelMessageWriter
 import com.github.plokhotnyuk.jsoniter_scala.core.JsonValueCodec
 import com.github.plokhotnyuk.jsoniter_scala.macros.JsonCodecMaker
 import com.github.plokhotnyuk.jsoniter_scala.macros.CodecMakerConfig
+import jsonrpc4s.LowLevelMessageReader
 
 object BaseProtocolMessageSuite extends SimpleTestSuite {
   implicit val stringCodec: JsonValueCodec[String] = JsonCodecMaker.make(CodecMakerConfig)
@@ -39,6 +40,13 @@ object BaseProtocolMessageSuite extends SimpleTestSuite {
          |
          |{"method":"method","params":"params","id":1,"jsonrpc":"2.0"}""".stripMargin
         .replaceAll("\r\n", "\n")
+    )
+  }
+
+  test("parse message from whole byte buffer") {
+    assertEquals(
+      LowLevelMessageReader.read(ByteBuffer.wrap(byteArray), Logger.root),
+      Some(message)
     )
   }
 

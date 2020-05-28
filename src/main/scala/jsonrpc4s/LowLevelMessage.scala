@@ -63,7 +63,7 @@ object LowLevelMessage {
       in: Observable[ByteBuffer],
       logger: LoggerSupport
   ): Observable[LowLevelMessage] = {
-    in.executeAsync.liftByOperator(new LowLevelMessageReader(logger))
+    in.executeAsync.liftByOperator(LowLevelMessageReader.streamReader(logger))
   }
 
   def toMsg(message: LowLevelMessage): Message = {
