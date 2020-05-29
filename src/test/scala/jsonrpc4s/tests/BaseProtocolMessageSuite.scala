@@ -17,6 +17,9 @@ import com.github.plokhotnyuk.jsoniter_scala.core.JsonValueCodec
 import com.github.plokhotnyuk.jsoniter_scala.macros.JsonCodecMaker
 import com.github.plokhotnyuk.jsoniter_scala.macros.CodecMakerConfig
 import jsonrpc4s.LowLevelMessageReader
+import scala.collection.mutable
+import java.nio.charset.StandardCharsets
+import scala.util.control.NonFatal
 
 object BaseProtocolMessageSuite extends SimpleTestSuite {
   implicit val stringCodec: JsonValueCodec[String] = JsonCodecMaker.make(CodecMakerConfig)
@@ -48,6 +51,23 @@ object BaseProtocolMessageSuite extends SimpleTestSuite {
       LowLevelMessageReader.read(ByteBuffer.wrap(byteArray), Logger.root),
       Some(message)
     )
+  }
+
+  test("parse custom written message") {
+    val msg = new mutable.ArrayBuffer[Byte](0)
+    msg.appendAll("""Content-Length: 70""".getBytes(StandardCharsets.US_ASCII))
+    msg.append('\r')
+    msg.append('\n')
+    msg.append('\r')
+    msg.append('\n')
+    msg.appendAll(
+      """{"result":{"serverVersion":"0.0.0-UNRELEASED"},"id":2,"jsonrpc":"2.0"}"""
+        .getBytes(StandardCharsets.UTF_8)
+    )
+
+    val bytes = new Array[Byte](msg.length)
+    msg.copyToArray(bytes)
+    println(LowLevelMessageReader.read(ByteBuffer.wrap(bytes), Logger.root))
   }
 
   private val s = TestScheduler()
@@ -118,9 +138,23 @@ object BaseProtocolMessageSuite extends SimpleTestSuite {
         ByteBuffer.wrap(byteArrayDouble.take(i)) ::
           ByteBuffer.wrap(byteArrayDouble.drop(i)) ::
           Nil
-      val obtained = parse(buffers)
-      val expected = List(message, message)
-      assertEquals(obtained, expected)
+      try {
+        val obtained = parse(buffers)
+        val expected = List(message, message)
+        assertEquals(obtained, expected)
+      } catch {
+        case NonFatal(err) =>
+          println("START")
+          println(s"i $i")
+
+          buffers.foreach { buffer =>
+            buffer.rewind()
+            println("BUFFER " + new String(buffer.array()))
+          }
+
+          println("END")
+          throw err
+      }
     }
   }
 }
