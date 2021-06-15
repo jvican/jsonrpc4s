@@ -5,12 +5,14 @@ import java.io.PrintStream
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import minitest.SimpleTestSuite
+import scribe.file.FileWriter
 
 object FileLoggerSuite extends SimpleTestSuite {
   test("logs don't go to stdout") {
     val path = Files.createTempFile("lsp4s", ".log")
     val baos = new ByteArrayOutputStream()
-    val writer = scribe.writer.FileWriter().path(_ => path).autoFlush
+
+    val writer = new FileWriter(path).flushAlways
     Console.withOut(new PrintStream(baos)) {
       val logger = scribe.Logger("lsp4s").orphan().withHandler(writer = writer)
       logger.info("This is info")

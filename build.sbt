@@ -1,3 +1,6 @@
+lazy val scala212 = "2.12.14"
+lazy val scala213 = "2.13.6"
+
 inThisBuild(
   List(
     organization := "me.vican.jorge",
@@ -19,7 +22,7 @@ inThisBuild(
         url("https://jvican.github.io/")
       )
     ),
-    scalaVersion := "2.13.2",
+    scalaVersion := scala213,
     scalacOptions ++= List(
       "-Yrangepos",
       "-deprecation",
@@ -31,13 +34,15 @@ inThisBuild(
 )
 
 name := "jsonrpc4s"
+crossScalaVersions := List(scala212, scala213)
 releaseEarlyWith := SonatypePublisher
 publishTo := sonatypePublishToBundle.value
 libraryDependencies ++= List(
-  "io.monix" %% "monix" % "3.1.0",
-  "com.outr" %% "scribe" % "2.7.10",
-  "com.github.plokhotnyuk.jsoniter-scala" %% "jsoniter-scala-core" % "2.1.15",
-  "com.github.plokhotnyuk.jsoniter-scala" %% "jsoniter-scala-macros" % "2.1.15" % Provided,
-  "io.monix" %% "minitest" % "2.7.0" % Test,
-  "com.lihaoyi" %% "pprint" % "0.5.6" % Test
+  "io.monix" %% "monix" % "3.2.0",
+  "com.outr" %% "scribe" % "3.5.5",
+  "com.outr" %% "scribe-file" % "3.5.5" % Test,
+  "com.github.plokhotnyuk.jsoniter-scala" %% "jsoniter-scala-core" % "2.8.2",
+  "com.github.plokhotnyuk.jsoniter-scala" %% "jsoniter-scala-macros" % "2.8.2" % Provided,
+  "io.monix" %% "minitest" % "2.9.6" % Test,
+  "com.lihaoyi" %% "pprint" % "0.6.6" % Test
 )

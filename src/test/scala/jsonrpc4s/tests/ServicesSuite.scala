@@ -16,5 +16,6 @@ object ServicesSuite extends SimpleTestSuite {
     intercept[IllegalArgumentException] {
       base.notification(duplicate)(_ => ())
     }
+    ()
   }
 }
