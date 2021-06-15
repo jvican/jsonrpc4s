@@ -38,7 +38,7 @@ crossScalaVersions := List(scala212, scala213)
 releaseEarlyWith := SonatypePublisher
 publishTo := sonatypePublishToBundle.value
 libraryDependencies ++= List(
-  "io.monix" %% "monix" % "3.4.0",
+  "io.monix" %% "monix" % "3.2.0",
   "com.outr" %% "scribe" % "3.5.5",
   "com.outr" %% "scribe-file" % "3.5.5" % Test,
   "com.github.plokhotnyuk.jsoniter-scala" %% "jsoniter-scala-core" % "2.8.2",
