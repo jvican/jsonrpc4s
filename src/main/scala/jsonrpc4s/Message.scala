@@ -11,7 +11,7 @@ import java.nio.ByteBuffer
 import java.nio.channels.Channels
 import java.nio.channels.WritableByteChannel
 
-import com.github.plokhotnyuk.jsoniter_scala.core.writeToString
+import com.github.plokhotnyuk.jsoniter_scala.core.writeToStringReentrant
 import com.github.plokhotnyuk.jsoniter_scala.core.JsonValueCodec
 import com.github.plokhotnyuk.jsoniter_scala.macros.JsonCodecMaker
 import com.github.plokhotnyuk.jsoniter_scala.macros.CodecMakerConfig
@@ -291,7 +291,7 @@ object Response {
     implicit val errorCodec: JsonValueCodec[StringifiedError] =
       JsonCodecMaker.make(CodecMakerConfig.withTransientDefault(false))
     val err = StringifiedError(id, error, headers)
-    writeToString(err, config = WriterConfig.withIndentionStep(4))
+    writeToStringReentrant(err, config = WriterConfig.withIndentionStep(4))
   }
 
   implicit val errorCodec: JsonValueCodec[Error] =
