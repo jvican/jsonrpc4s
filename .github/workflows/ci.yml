@@ -1,37 +1,42 @@
-name: Continuous Integration
+name: CI
 on:
   push:
     branches:
-      - master
+    - main
+    tags:
+    - "v*"
   pull_request:
 
 jobs:
   test:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest, macOS-latest]
-        jdk: [graalvm@21.1.0, adopt@1.11]
-    name: Test ${{ matrix.os }} -- ${{ matrix.jdk }}
+    runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v1
-        with:
-          submodules: true
-      - uses: olafurpg/setup-scala@v12
-        with:
-          java-version: ${{ matrix.jdk }}
-      - name: Set up environment
-        run: |
-          curl -Lo coursier https://git.io/coursier-cli && chmod +x coursier && ./coursier --help
-          java -version
-        shell: bash
-      - name: Check formatting
-        if: matrix.os != 'windows-latest'
-        run: |
-          ./bin/scalafmt --test
-        shell: bash
-      - name: Compile and test jsonrpc4s
-        run: |
-          sbt +test
-        shell: bash
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+    - uses: coursier/cache-action@v6.4
+    - uses: VirtusLab/scala-cli-setup@v1.0
+      with:
+        power: true
+    - name: Test
+      run: scala-cli test . --cross
+
+  publish:
+    needs: test
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+    - uses: coursier/cache-action@v6.4
+    - uses: VirtusLab/scala-cli-setup@v1.0
+      with:
+        power: true
+    - name: Publish
+      run: scala-cli publish . --cross
+      env:
+        PUBLISH_USER: ${{ secrets.PUBLISH_USER }}
+        PUBLISH_PASSWORD: ${{ secrets.PUBLISH_PASSWORD }}
+        PUBLISH_SECRET_KEY: ${{ secrets.PUBLISH_SECRET_KEY }}
+        PUBLISH_SECRET_KEY_PASSWORD: ${{ secrets.PUBLISH_SECRET_KEY_PASSWORD }}
