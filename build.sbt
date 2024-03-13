@@ -41,8 +41,8 @@ libraryDependencies ++= List(
   "io.monix" %% "monix" % "3.2.0",
   "com.outr" %% "scribe" % "3.5.5",
   "com.outr" %% "scribe-file" % "3.5.5" % Test,
-  "com.github.plokhotnyuk.jsoniter-scala" %% "jsoniter-scala-core" % "2.8.2",
-  "com.github.plokhotnyuk.jsoniter-scala" %% "jsoniter-scala-macros" % "2.8.2" % Provided,
+  "com.github.plokhotnyuk.jsoniter-scala" %% "jsoniter-scala-core" % "2.13.5",
+  "com.github.plokhotnyuk.jsoniter-scala" %% "jsoniter-scala-macros" % "2.13.5" % Provided,
   "io.monix" %% "minitest" % "2.9.6" % Test,
   "com.lihaoyi" %% "pprint" % "0.6.6" % Test
 )
